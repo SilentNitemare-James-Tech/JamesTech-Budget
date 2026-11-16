@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Plan your weekly income, savings, and spending.">
+  <title>JamesTech Budget</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="watermark" aria-hidden="true">jamestech</div>
+  <header class="masthead wrap">
+    <div class="brand"><span class="mark" aria-hidden="true">J</span> JamesTech <span>Budget</span></div>
+    <div class="actions">
+      <button id="export" type="button">Export data</button>
+      <button id="import" type="button">Import</button>
+      <input type="file" id="import-file" accept=".json,application/json" hidden>
+    </div>
+  </header>
+  <main class="wrap">
+    <!-- Weekly dashboard -->
+    <div class="intro">
+      <div><h1>Weekly budget</h1><p id="week-label"></p></div>
+      <button id="reset" type="button">Reset week</button>
+    </div>
+    <p id="status" role="status" hidden></p>
+    <section class="summary" aria-label="Weekly summary">
+      <article class="hero"><h2>Free Money</h2><output id="free-money">$0.00</output><p id="free-caption">Available after savings and expenses</p></article>
+      <article><h2>Net Pay</h2><output id="net-pay">$0.00</output></article>
+      <article><h2>Savings</h2><output id="weekly-saving">$0.00</output></article>
+      <article><h2>Total Expenses</h2><output id="total-expenses">$0.00</output></article>
+    </section>
+
+    <!-- Pay, savings, and spending breakdown -->
+    <div class="overview">
+      <section class="panel">
+        <h2>Income calculator</h2>
+        <form id="income-form">
+          <div class="fields two">
+            <label>Week date<input name="date" type="date" min="1900-01-01" max="9998-12-31" required></label>
+            <label>Hourly rate ($)<input name="rate" type="number" min="0" max="1000000" step=".01" inputmode="decimal" required></label>
+            <label>Hours worked<input name="hours" type="number" min="0" max="168" step=".01" inputmode="decimal" required></label>
+            <label>Tax format<select name="taxMode"><option value="amount">Dollar amount</option><option value="percent">Percent of gross pay</option></select></label>
+            <label><span id="tax-label">Taxes withheld ($)</span><input name="tax" type="number" min="0" max="168000000" step=".01" inputmode="decimal" required></label>
+          </div>
+          <div class="inline-total"><span>Gross pay</span><output id="gross-pay">$0.00</output></div>
+          <button class="primary" type="submit">Save week</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Savings goal</h2>
+        <form id="savings-form" class="fields">
+          <label>Save each week<select name="mode"><option value="amount">Fixed dollar amount</option><option value="percent">Percent of net pay</option></select></label>
+          <label><span id="saving-label">Weekly amount ($)</span><input name="value" type="number" min="0" max="1000000" step=".01" inputmode="decimal" required></label>
+          <label>Goal target ($), optional<input name="target" type="number" min="0" max="100000000" step=".01" inputmode="decimal" placeholder="e.g. 2000"></label>
+        </form>
+        <div class="inline-total"><span>Saved across logged weeks</span><output id="saved-total">$0.00</output></div>
+        <div id="goal" hidden><progress id="goal-progress" value="0" max="1" aria-label="Savings goal progress"></progress><p id="goal-caption" class="muted"></p></div>
+      </section>
+      <section class="panel spending">
+        <h2>Spending by category</h2>
+        <p class="muted">Weekly recurring costs and one-time purchases for this week.</p>
+        <svg id="chart" viewBox="0 0 300 16" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <ul id="chart-legend" class="legend"></ul>
+      </section>
+    </div>
+
+    <!-- Purchase form and lists -->
+    <section class="panel purchases" id="purchase-panel">
+      <h2 id="purchase-title">Add a purchase</h2>
+      <form id="purchase-form">
+        <div class="fields purchase-fields">
+          <label>Name<input name="title" type="text" required maxlength="100" placeholder="e.g. Groceries"></label>
+          <label>Amount ($)<input name="amount" type="number" min=".01" max="1000000" step=".01" inputmode="decimal" required></label>
+          <label>Category<select name="category"></select></label>
+          <label>Date<input name="date" type="date" min="1900-01-01" max="9998-12-31" required></label>
+          <label>Type<select name="type"><option>One-time</option><option>Recurring</option></select></label>
+          <label id="frequency-field" hidden>Frequency<select name="frequency"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></label>
+        </div>
+        <div class="actions"><button class="primary" id="purchase-submit" type="submit">Add purchase</button><button id="cancel-edit" type="button" hidden>Cancel edit</button></div>
+      </form>
+    </section>
+    <div class="lists" id="purchase-lists"></div>
+
+    <!-- Saved income history -->
+    <section class="panel history">
+      <h2>Income history</h2>
+      <div id="history"></div>
+    </section>
+  </main>
+  <footer class="wrap">jamestech</footer>
+
+  <template id="expense-template">
+    <section class="panel expense-list">
+      <div class="list-header"><h2></h2><output class="subtotal"></output></div>
+      <p class="scope muted"></p>
+      <div class="fields two">
+        <label>Category filter<select class="filter"></select></label>
+        <label>Sort by<select class="sort"><option value="date">Date · newest</option><option value="amount">Amount · highest</option><option value="category">Category · A–Z</option></select></label>
+      </div>
+      <ul class="entries"></ul>
+      <dl class="category-totals"></dl>
+    </section>
+  </template>
+</body>
+</html>

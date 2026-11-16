@@ -1,0 +1,115 @@
+/* Theme and page layout */
+:root {
+  color-scheme: dark;
+  --bg: #10141b;
+  --panel: #191f29;
+  --border: #303a49;
+  --text: #f0f4f8;
+  --muted: #aebbd0;
+  --green: #76ebbb;
+  --yellow: #ffd576;
+  --red: #ff9caa;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; min-width: 0; background: var(--bg); color: var(--text); }
+.wrap { position: relative; width: min(1180px, calc(100% - 48px)); margin-inline: auto; }
+.watermark {
+  position: fixed; inset: 50% auto auto 50%; transform: translate(-50%, -50%) rotate(-29deg);
+  color: #edf9ff; opacity: .035; font-size: clamp(5rem, 18vw, 19rem); font-weight: 850;
+  pointer-events: none; user-select: none; white-space: nowrap;
+}
+.masthead, .intro, .list-header, .inline-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.masthead { min-height: 76px; border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 6px; font-weight: 750; white-space: nowrap; }
+.brand > span:last-child { color: var(--muted); font-weight: 500; }
+.mark {
+  display: grid; place-items: center; width: 32px; height: 32px; margin-right: 5px;
+  border-radius: 9px; background: var(--green); color: #10251e;
+}
+.intro { margin: 32px 0 21px; }
+h1, h2, p { margin: 0; }
+h1 { font-size: clamp(1.8rem, 5vw, 2.65rem); letter-spacing: -.04em; }
+h2 { font-size: 1.06rem; letter-spacing: -.015em; }
+.intro p, .muted, .hero p, footer { color: var(--muted); font-size: .88rem; line-height: 1.5; }
+.intro p { margin-top: 5px; }
+footer { padding: 26px 0; text-align: right; }
+#status { padding: 12px 15px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+
+/* Dashboard cards and panels */
+.summary, .overview, .lists { display: grid; gap: 14px; }
+.summary { grid-template-columns: 1.65fr repeat(3, minmax(0, 1fr)); }
+.overview { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 18px; }
+.lists { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.summary article, .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 15px; padding: 20px; min-width: 0; }
+.summary article { display: flex; flex-direction: column; justify-content: center; }
+.summary h2 { color: var(--muted); font-size: .88rem; font-weight: 600; }
+.summary output { display: block; margin-top: 7px; font-size: clamp(1.1rem, 2.6vw, 1.9rem); font-weight: 750; }
+output, .entry-amount, td { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.summary .hero { background: linear-gradient(145deg, #18352e, #19262b 83%); border-color: #3e6d5c; }
+.hero output { font-size: clamp(1.8rem, 4.1vw, 3.45rem); line-height: 1.05; letter-spacing: -.045em; }
+.hero p { margin-top: 7px; }
+.hero output[data-tone="green"] { color: var(--green); }
+.hero output[data-tone="yellow"] { color: var(--yellow); }
+.hero output[data-tone="red"] { color: var(--red); }
+.panel > h2 { margin-bottom: 15px; }
+.purchases, .history { margin-block: 16px; }
+
+/* Forms and controls */
+.fields { display: grid; gap: 11px; }
+.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.purchase-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+label { display: grid; gap: 5px; color: var(--muted); font-size: .82rem; align-content: start; min-width: 0; }
+input, select, button {
+  border: 1px solid #384558; border-radius: 8px; min-height: 42px; padding: 8px 11px;
+  font: inherit; color: var(--text); background: #121822;
+}
+input, select { width: 100%; min-width: 0; font-size: .94rem; }
+button { cursor: pointer; font-size: .85rem; font-weight: 650; }
+button:hover { background: #263243; }
+.primary { background: var(--green); color: #11291f; border-color: var(--green); }
+.primary:hover { background: #9ff6d3; }
+:focus-visible { outline: 2px solid #a4bfff; outline-offset: 3px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#purchase-form .actions { margin-top: 14px; }
+.inline-total { border-top: 1px solid var(--border); margin-top: 14px; padding: 12px 0; font-size: .88rem; }
+.inline-total output, .subtotal { font-weight: 750; }
+progress { width: 100%; height: 12px; accent-color: var(--green); }
+
+/* Spending chart, purchase rows, and history */
+#chart { display: block; width: 100%; height: 14px; margin: 15px 0; border-radius: 7px; background: #303a49; }
+.legend, .entries { list-style: none; padding: 0; margin: 0; }
+.legend li { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; padding: 5px 0; font-size: .85rem; }
+.swatch { width: 9px; height: 9px; border-radius: 3px; }
+.scope { margin: 6px 0 12px; }
+.entries { margin-top: 10px; }
+.entries li { padding: 11px 0; border-bottom: 1px solid var(--border); }
+.entry-head { display: flex; justify-content: space-between; gap: 10px; overflow-wrap: anywhere; }
+.entries .actions { margin-top: 8px; }
+.entries button { min-height: 36px; }
+.category-totals { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: .84rem; color: var(--muted); margin-bottom: 0; }
+.category-totals dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; white-space: nowrap; }
+th, td { padding: 10px; text-align: right; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); }
+th:first-child, td:first-child { text-align: left; padding-left: 0; }
+
+@media (max-width: 940px) {
+  .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .spending { grid-column: 1 / -1; }
+}
+@media (max-width: 620px) {
+  .wrap { width: calc(100% - 28px); }
+  .masthead { flex-wrap: wrap; padding-block: 12px; }
+  .intro { margin-top: 20px; }
+  .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .summary .hero { grid-column: 1 / -1; padding: 17px; }
+  .summary article { padding: 10px 8px; }
+  .summary h2 { font-size: .77rem; }
+  .overview, .lists { grid-template-columns: minmax(0, 1fr); }
+  .purchase-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel { padding: 15px; }
+}
+
