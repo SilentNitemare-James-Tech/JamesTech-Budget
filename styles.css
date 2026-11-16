@@ -203,3 +203,12 @@ button, input, select { border-radius: 4px; }
   .overview { grid-template-columns: minmax(0, 1fr); }
   .spending .legend { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Pay schedule and paycheck history */
+#income-allocation { margin: 0 0 10px; }
+.savings-heading {
+  margin-top: 21px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+#history td button { min-height: 34px; }

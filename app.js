@@ -11,10 +11,12 @@
   const cents = dollars => Math.round(dollars * 100);
   const $ = id => document.getElementById(id);
   const income = $("income-form").elements;
+  const schedule = $("pay-schedule").elements;
   const savings = $("savings-form").elements;
   const purchase = $("purchase-form").elements;
   const lists = [];
   let editingId = null;
+  let editingPaycheck = null;
 
   function dateKey(date) {
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -47,9 +49,17 @@
   const validNumber = (value, max, min = 0) =>
     Number.isFinite(value) && value >= min && value <= max && Math.abs(value - cents(value) / 100) < 0.000001;
   const validMode = value => value === "amount" || value === "percent";
+  const payCadences = { weekly: "Weekly", biweekly: "Every 2 weeks" };
+  const validCadence = value => typeof value === "string" && Object.hasOwn(payCadences, value);
+  const payWeeks = entry => entry.frequency === "biweekly" ? 2 : 1;
+  const validSavingPlan = plan => plan && validMode(plan.mode) &&
+    validNumber(plan.value, plan.mode === "percent" ? 100 : 1000000);
+  const validSchedule = plan => plan === undefined || (plan &&
+    validCadence(plan.frequency) && (plan.date === null || validDate(plan.date)));
   const validPay = entry => entry && validDate(entry.date) &&
-    validNumber(entry.rate, 1000000) && validNumber(entry.hours, 168) &&
-    validMode(entry.taxMode) && validNumber(entry.tax, entry.taxMode === "percent" ? 100 : 168000000);
+    (entry.frequency === undefined || validCadence(entry.frequency)) &&
+    validNumber(entry.rate, 1000000) && validNumber(entry.hours, 168 * payWeeks(entry)) &&
+    validMode(entry.taxMode) && validNumber(entry.tax, entry.taxMode === "percent" ? 100 : 168000000 * payWeeks(entry));
   const validPurchase = item => item && typeof item.id === "string" && item.id.length > 0 &&
     typeof item.title === "string" && item.title.trim().length > 0 && item.title.length <= 100 &&
     validNumber(item.amount, 1000000, .01) && categories.includes(item.category) && validDate(item.date) &&
@@ -61,13 +71,13 @@
   let state = { version: 1, savings: { mode: "amount", value: 0, target: null }, drafts: [], history: [], purchases: [] };
 
   function validateBackup(data) {
-    if (data?.version !== 1 || !data.savings || !validMode(data.savings.mode) ||
-        !validNumber(data.savings.value, data.savings.mode === "percent" ? 100 : 1000000) ||
+    if (data?.version !== 1 || !validSavingPlan(data.savings) || !validSchedule(data.paySchedule) ||
         (data.savings.target !== null && !validNumber(data.savings.target, 100000000)) ||
         !Array.isArray(data.drafts) || !Array.isArray(data.history) || !Array.isArray(data.purchases) ||
         !data.drafts.every(validPay) ||
         !data.history.every(entry => validPay(entry) && payTotals(entry).net >= 0 &&
-          Number.isSafeInteger(entry.saved) && entry.saved >= 0 && entry.saved <= 16800000000) ||
+          (entry.savingPlan === undefined || validSavingPlan(entry.savingPlan)) &&
+          Number.isSafeInteger(entry.saved) && entry.saved >= 0 && entry.saved <= 16800000000 * payWeeks(entry)) ||
         !data.purchases.every(validPurchase)) {
       throw new Error("Invalid JamesTech Budget backup.");
     }
@@ -127,6 +137,23 @@
     return plan.mode === "percent" ? Math.round(Math.max(0, net) * plan.value / 100) : cents(plan.value);
   }
 
+  function paycheckSavings(entry, plan) {
+    const { net } = payTotals(entry);
+    return plan.mode === "percent" ? Math.round(net * plan.value / 100) : cents(plan.value) * payWeeks(entry);
+  }
+
+  function nextPayday(plan, from) {
+    if (!plan?.date) return null;
+    const period = 7 * payWeeks(plan);
+    const elapsedDays = (Date.parse(from) - Date.parse(plan.date)) / 86400000;
+    return offsetDate(plan.date, Math.max(0, Math.ceil(elapsedDays / period)) * period);
+  }
+
+  function fillSchedule() {
+    schedule.frequency.value = state.paySchedule?.frequency ?? "weekly";
+    schedule.date.value = state.paySchedule?.date ?? "";
+  }
+
   function weeklyCost(item) {
     const cost = cents(item.amount);
     if (item.frequency === "biweekly") return Math.round(cost / 2);
@@ -146,7 +173,9 @@
   // Input handling and live dashboard.
   function readPay() {
     return {
-      date: selectedDate, rate: income.rate.valueAsNumber, hours: income.hours.valueAsNumber,
+      date: editingPaycheck ? income.date.value : selectedDate,
+      frequency: income.frequency.value,
+      rate: income.rate.valueAsNumber, hours: income.hours.valueAsNumber,
       taxMode: income.taxMode.value, tax: income.tax.valueAsNumber
     };
   }
@@ -158,8 +187,12 @@
   }
 
   function fillIncome() {
-    const entry = weekPay();
-    income.date.value = selectedDate;
+    const entry = editingPaycheck ?? weekPay();
+    income.date.value = editingPaycheck?.date ?? selectedDate;
+    income.frequency.value = entry ? entry.frequency ?? "weekly" : state.paySchedule?.frequency ?? "weekly";
+    $("income-title").textContent = editingPaycheck ? "Edit saved paycheck" : "Income calculator";
+    $("save-paycheck").textContent = editingPaycheck ? "Save changes" : "Save paycheck";
+    $("cancel-pay-edit").hidden = !editingPaycheck;
     income.rate.value = entry?.rate ?? 0;
     income.hours.value = entry?.hours ?? 0;
     income.taxMode.value = entry?.taxMode ?? "amount";
@@ -170,9 +203,10 @@
   function updateTaxField() {
     const percent = income.taxMode.value === "percent";
     $("tax-label").textContent = percent ? "Taxes withheld (%)" : "Taxes withheld ($)";
-    income.tax.max = percent ? 100 : 168000000;
-    income.tax.setCustomValidity("");
     const entry = readPay();
+    income.hours.max = 168 * payWeeks(entry);
+    income.tax.max = percent ? 100 : 168000000 * payWeeks(entry);
+    income.tax.setCustomValidity("");
     if (validPay(entry) && payTotals(entry).net < 0) {
       income.tax.setCustomValidity("Taxes withheld cannot exceed gross pay.");
     }
@@ -195,17 +229,35 @@
     const start = monday(selectedDate);
     const end = offsetDate(start, 6);
     $("week-label").textContent = displayDate(start) + " – " + displayDate(end);
+    const upcomingPayday = nextPayday(state.paySchedule, today());
+    $("next-payday").hidden = !upcomingPayday;
+    if (upcomingPayday) $("next-payday").textContent = "Next scheduled payday: " + displayDate(upcomingPayday);
+
     const entry = readPay();
+    const weeks = payWeeks(entry);
     // Blank or temporarily invalid fields contribute zero until corrected.
-    for (const [field, max] of [["rate", 1000000], ["hours", 168], ["tax", entry.taxMode === "percent" ? 100 : 168000000]]) {
+    for (const [field, max] of [["rate", 1000000], ["hours", 168 * weeks], ["tax", entry.taxMode === "percent" ? 100 : 168000000 * weeks]]) {
       if (!validNumber(entry[field], max)) entry[field] = 0;
     }
-    const { gross, net } = payTotals(entry);
+    const paycheck = payTotals(entry);
+    const previousWeek = offsetDate(start, -7);
+    const previousPaycheck = !editingPaycheck && !weekPay()
+      ? state.history.find(item => item.frequency === "biweekly" && monday(item.date) === previousWeek)
+      : null;
+    const previousNet = previousPaycheck ? payTotals(previousPaycheck).net : 0;
+    const net = previousPaycheck ? Math.floor(previousNet / 2) : Math.ceil(paycheck.net / weeks);
+    $("income-allocation").hidden = !previousPaycheck && weeks === 1;
+    if (previousPaycheck || weeks === 2) {
+      $("income-allocation").textContent = previousPaycheck
+        ? "Net Pay includes the second half of the " + displayDate(previousPaycheck.date) + " paycheck."
+        : "Net Pay shows this week’s share of your two-week paycheck.";
+    }
     const saving = weeklySavings(net);
     const totals = budgetExpenses(start, end);
     const expense = Object.values(totals).reduce((sum, value) => sum + value, 0);
     const free = net - saving - expense;
-    $("gross-pay").value = money(gross);
+    $("gross-pay").value = money(paycheck.gross);
+    $("paycheck-net").value = money(paycheck.net);
     $("net-pay").value = money(net);
     $("weekly-saving").value = money(saving);
     $("total-expenses").value = money(expense);
@@ -262,15 +314,15 @@
     const container = $("history");
     container.replaceChildren();
     if (state.history.length === 0) {
-      container.append(node("p", "Save a week to start your income history.", "muted"));
+      container.append(node("p", "Save a paycheck to start your income history.", "muted"));
       return;
     }
     const scroll = node("div", undefined, "table-scroll");
     scroll.tabIndex = 0;
-    scroll.setAttribute("aria-label", "Scrollable weekly income history");
+    scroll.setAttribute("aria-label", "Scrollable paycheck history");
     const table = node("table");
     const headings = table.createTHead().insertRow();
-    for (const label of ["Week date", "Hours", "Gross", "Taxes", "Net", "Savings"]) {
+    for (const label of ["Payday", "Frequency", "Hours", "Gross", "Taxes", "Net", "Savings", "Action"]) {
       const heading = node("th", label);
       heading.scope = "col";
       headings.append(heading);
@@ -279,9 +331,24 @@
     for (const entry of [...state.history].sort((a, b) => b.date.localeCompare(a.date))) {
       const { gross, tax, net } = payTotals(entry);
       const row = body.insertRow();
-      for (const value of [displayDate(entry.date), entry.hours, money(gross), money(tax), money(net), money(entry.saved)]) {
+      for (const value of [displayDate(entry.date), payCadences[entry.frequency ?? "weekly"], entry.hours,
+        money(gross), money(tax), money(net), money(entry.saved)]) {
         row.insertCell().textContent = value;
       }
+      const edit = node("button", "Edit");
+      edit.type = "button";
+      edit.setAttribute("aria-label", "Edit paycheck for " + displayDate(entry.date));
+      edit.addEventListener("click", () => {
+        editingPaycheck = entry;
+        selectedDate = entry.date;
+        income.date.setCustomValidity("");
+        fillIncome();
+        renderDashboard();
+        // Bring the selected record directly into view for keyboard and touch users.
+        activateView("income");
+        income.date.focus();
+      });
+      row.insertCell().append(edit);
     }
     scroll.append(table);
     container.append(scroll);
@@ -398,12 +465,32 @@
     lists.forEach(renderList);
   }
 
+  // Pay schedules set a default. Historical entries retain their own frequency.
+  $("pay-schedule").addEventListener("submit", event => {
+    event.preventDefault();
+    const frequency = schedule.frequency.value;
+    const date = schedule.date.value || null;
+    if (!validCadence(frequency) || (date !== null && !validDate(date))) return;
+    state.paySchedule = { frequency, date };
+    if (!editingPaycheck && !weekPay()) fillIncome();
+    if (persist()) announce("Pay schedule saved.");
+    renderDashboard();
+  });
+
+  $("cancel-pay-edit").addEventListener("click", () => {
+    editingPaycheck = null;
+    income.date.setCustomValidity("");
+    fillIncome();
+    renderDashboard();
+    changeView("history");
+  });
+
   // Connect form events and persist valid edits as they happen.
   $("income-form").addEventListener("input", event => {
     if (event.target === income.date) return;
     updateTaxField();
     const entry = readPay();
-    if (validPay(entry)) {
+    if (!editingPaycheck && validPay(entry)) {
       setWeek(state.drafts, entry);
       persist();
     }
@@ -411,6 +498,11 @@
   });
 
   income.date.addEventListener("change", () => {
+    income.date.setCustomValidity("");
+    if (editingPaycheck) {
+      updateTaxField();
+      return;
+    }
     if (!validDate(income.date.value)) {
       income.date.value = selectedDate;
       return;
@@ -430,10 +522,30 @@
     if (!$("income-form").reportValidity()) return;
     const entry = readPay();
     if (!validPay(entry)) return;
+    const previous = editingPaycheck;
+    const oldWeek = previous ? monday(previous.date) : null;
+    const newWeek = monday(entry.date);
+    if (previous && oldWeek !== newWeek) {
+      const occupied = [...state.history, ...state.drafts].some(item => monday(item.date) === newWeek);
+      if (occupied) {
+        income.date.setCustomValidity("That week already has paycheck data. Choose another date.");
+        income.date.reportValidity();
+        return;
+      }
+      state.history = state.history.filter(item => monday(item.date) !== oldWeek);
+      state.drafts = state.drafts.filter(item => monday(item.date) !== oldWeek);
+    }
+    const plan = previous ? previous.savingPlan : { mode: state.savings.mode, value: state.savings.value };
+    const saved = plan ? paycheckSavings(entry, plan) : previous.saved;
     setWeek(state.drafts, entry);
-    setWeek(state.history, { ...entry, saved: weeklySavings(payTotals(entry).net) });
-    if (persist()) announce("Week saved to income history.");
+    setWeek(state.history, { ...entry, ...(plan && { savingPlan: plan }), saved });
+    editingPaycheck = null;
+    selectedDate = entry.date;
+    fillIncome();
+    if (!editingId) purchase.date.value = entry.date;
+    if (persist()) announce(previous ? "Saved paycheck updated." : "Paycheck added to history.");
     refresh();
+    if (previous) changeView("history");
   });
 
   $("savings-form").addEventListener("submit", event => event.preventDefault());
@@ -483,9 +595,12 @@
     selectedDate = today();
     const start = monday(selectedDate);
     const end = offsetDate(start, 6);
+    editingPaycheck = null;
+    income.date.setCustomValidity("");
     const entry = weekPay();
     setWeek(state.drafts, {
-      date: selectedDate, hours: 0, rate: entry?.rate ?? 0, taxMode: entry?.taxMode ?? "amount",
+      date: selectedDate, frequency: entry?.frequency ?? state.paySchedule?.frequency ?? "weekly",
+      hours: 0, rate: entry?.rate ?? 0, taxMode: entry?.taxMode ?? "amount",
       tax: entry?.taxMode === "percent" ? entry.tax : 0
     });
     state.purchases = state.purchases.filter(item => item.type === "Recurring" || item.date < start || item.date > end);
@@ -521,9 +636,11 @@
     }
     if (!window.confirm("Replace the current budget data with this backup?")) return;
     state = backup;
+    editingPaycheck = null;
     selectedDate = today();
     fillIncome();
     fillSavings();
+    fillSchedule();
     clearPurchase();
     if (persist()) announce("Backup restored.");
     refresh();
@@ -608,9 +725,12 @@
   const emptyBudget = () => ({ version: 1, savings: { mode: "amount", value: 0, target: null }, drafts: [], history: [], purchases: [] });
 
   function displayBudget() {
+    editingPaycheck = null;
+    income.date.setCustomValidity("");
     selectedDate = today();
     fillIncome();
     fillSavings();
+    fillSchedule();
     clearPurchase();
     refresh();
   }
@@ -818,12 +938,14 @@
   load();
   fillIncome();
   fillSavings();
+  fillSchedule();
   fillCategories(purchase.category);
   clearPurchase();
   buildLists();
   refresh();
   void initializeAccounts();
 })();
+
 
 
 

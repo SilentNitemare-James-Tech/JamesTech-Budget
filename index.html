@@ -59,10 +59,11 @@
     <section class="console-view" data-screen="dashboard" aria-label="Overview">
     <!-- Weekly dashboard -->
     <div class="intro">
-      <div><h1>Weekly budget</h1><p id="week-label"></p></div>
+      <div><h1>Weekly budget</h1><p id="week-label"></p><p id="next-payday" hidden></p></div>
       <button id="reset" type="button">Reset week</button>
     </div>
 
+    <p id="income-allocation" class="muted" hidden></p>
     <section class="summary" aria-label="Weekly summary">
       <article class="hero"><h2>Free Money</h2><output id="free-money">$0.00</output><p id="free-caption">Available after savings and expenses</p></article>
       <article><h2>Net Pay</h2><output id="net-pay">$0.00</output></article>
@@ -82,21 +83,29 @@
     <!-- Pay and savings -->
     <div class="overview">
       <section class="panel">
-        <h2>Income calculator</h2>
+        <h2 id="income-title">Income calculator</h2>
         <form id="income-form">
           <div class="fields two">
-            <label>Week date<input name="date" type="date" min="1900-01-01" max="9998-12-31" required></label>
+            <label>Payday<input name="date" type="date" min="1900-01-01" max="9998-12-31" required></label>
+            <label>Paycheck frequency<select name="frequency"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option></select></label>
             <label>Hourly rate ($)<input name="rate" type="number" min="0" max="1000000" step=".01" inputmode="decimal" required></label>
-            <label>Hours worked<input name="hours" type="number" min="0" max="168" step=".01" inputmode="decimal" required></label>
+            <label>Hours in paycheck<input name="hours" type="number" min="0" max="168" step=".01" inputmode="decimal" required></label>
             <label>Tax format<select name="taxMode"><option value="amount">Dollar amount</option><option value="percent">Percent of gross pay</option></select></label>
             <label><span id="tax-label">Taxes withheld ($)</span><input name="tax" type="number" min="0" max="168000000" step=".01" inputmode="decimal" required></label>
           </div>
-          <div class="inline-total"><span>Gross pay</span><output id="gross-pay">$0.00</output></div>
-          <button class="primary" type="submit">Save week</button>
+          <div class="inline-total"><span>Paycheck gross</span><output id="gross-pay">$0.00</output></div>
+          <div class="inline-total"><span>Paycheck net</span><output id="paycheck-net">$0.00</output></div>
+          <div class="actions"><button class="primary" id="save-paycheck" type="submit">Save paycheck</button><button id="cancel-pay-edit" type="button" hidden>Cancel edit</button></div>
         </form>
       </section>
       <section class="panel">
-        <h2>Savings goal</h2>
+        <h2>Pay schedule</h2>
+        <form id="pay-schedule" class="fields">
+          <label>I get paid<select name="frequency"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option></select></label>
+          <label>First scheduled payday<input name="date" type="date" min="1900-01-01" max="9998-12-31"></label>
+          <div><button type="submit">Save pay schedule</button></div>
+        </form>
+        <h2 class="savings-heading">Savings goal</h2>
         <form id="savings-form" class="fields">
           <label>Save each week<select name="mode"><option value="amount">Fixed dollar amount</option><option value="percent">Percent of net pay</option></select></label>
           <label><span id="saving-label">Weekly amount ($)</span><input name="value" type="number" min="0" max="1000000" step=".01" inputmode="decimal" required></label>
