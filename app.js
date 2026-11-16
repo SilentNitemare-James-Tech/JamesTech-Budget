@@ -529,6 +529,64 @@
     refresh();
   });
 
+  // Console navigation keeps the entire budget in memory while switching views.
+  const viewButtons = [...document.querySelectorAll("[data-view]")];
+  const viewPanels = [...document.querySelectorAll("[data-screen]")];
+  let currentView = "dashboard";
+  let viewTimer;
+
+  function activateView(view) {
+    clearTimeout(viewTimer);
+    for (const panel of viewPanels) panel.hidden = panel.dataset.screen !== view;
+    for (const button of viewButtons) {
+      if (button.dataset.view === view) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    }
+    currentView = view;
+  }
+
+  function changeView(view) {
+    clearTimeout(viewTimer);
+    const progress = $("view-progress");
+    progress.classList.remove("running");
+    if (view === currentView || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      activateView(view);
+      return;
+    }
+    // Restart the scan animation even after a rapid second selection.
+    void progress.offsetWidth;
+    progress.classList.add("running");
+    viewTimer = setTimeout(() => {
+      activateView(view);
+      progress.classList.remove("running");
+    }, 240);
+  }
+
+  for (const button of viewButtons) {
+    button.addEventListener("click", () => changeView(button.dataset.view));
+  }
+
+  function showLogin(visible) {
+    $("account-panel").hidden = !visible;
+    $("budget-main").hidden = visible;
+    $("top-actions").hidden = visible;
+    $("open-login").hidden = Boolean(accountId) || !cloud;
+    document.body.classList.toggle("login-screen", visible);
+    if (visible) {
+      $("status").hidden = true;
+      window.scrollTo(0, 0);
+    }
+  }
+
+  $("open-login").addEventListener("click", () => showLogin(true));
+  $("continue-guest").addEventListener("click", () => {
+    if (recovering) {
+      $("sign-out").click();
+      return;
+    }
+    showLogin(false);
+  });
+
   // Account storage. The guest budget stays under its original browser key.
   let cloud = null;
   let accountId = null;
@@ -622,8 +680,10 @@
         load();
       }
       displayBudget();
+      showLogin(!next);
       lockBudget(false);
     } catch {
+      if (next) showLogin(false);
       // Keep the editor locked so a failed read cannot overwrite stored data.
       accountMessage("Couldn’t load your account budget. Sign out and sign in to retry.");
     } finally {
@@ -643,7 +703,8 @@
   async function initializeAccounts() {
     const config = window.JAMESTECH_CLOUD;
     if (!config?.url || !config?.publishableKey) return;
-    $("account-panel").hidden = false;
+    showLogin(true);
+    $("continue-guest").disabled = true;
     lockBudget(true);
     accountMessage("Checking your sign-in…");
     try {
@@ -652,8 +713,11 @@
       cloud.auth.onAuthStateChange((event, session) => {
         // Schedule database calls outside Supabase's auth callback.
         setTimeout(() => {
+          $("continue-guest").disabled = false;
           if (event === "PASSWORD_RECOVERY") {
             recovering = true;
+            showLogin(true);
+            $("continue-guest").textContent = "Cancel password reset";
             lockBudget(true);
             authForm.hidden = false;
             $("sign-out").hidden = false;
@@ -670,6 +734,7 @@
       });
     } catch {
       authForm.hidden = true;
+      showLogin(false);
       accountMessage("Account services are unavailable. The local budget is available.");
       lockBudget(false);
     }
@@ -677,6 +742,7 @@
 
   function resetRecoveryForm() {
     recovering = false;
+    $("continue-guest").textContent = "Continue on this device";
     emailField.parentElement.hidden = false;
     emailField.required = true;
     $("sign-up").hidden = $("forgot-password").hidden = false;
@@ -758,5 +824,7 @@
   refresh();
   void initializeAccounts();
 })();
+
+
 
 

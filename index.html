@@ -12,8 +12,10 @@
 <body>
   <div class="watermark" aria-hidden="true">jamestech</div>
   <header class="masthead wrap">
-    <div class="brand"><span class="mark" aria-hidden="true">J</span> JamesTech <span>Budget</span></div>
-    <div class="actions">
+    <div class="brand"><span class="mark" aria-hidden="true">JT</span> JamesTech <span>Budget</span></div>
+    <div class="actions" id="top-actions">
+      <button id="open-login" type="button" hidden>Account</button>
+      <button id="sign-out" type="button" hidden>Sign out</button>
       <button id="export" type="button">Export data</button>
       <button id="import" type="button">Import</button>
       <input type="file" id="import-file" accept=".json,application/json" hidden>
@@ -21,7 +23,9 @@
   </header>
   <!-- Account controls appear once cloud settings are configured. -->
   <section id="account-panel" class="panel wrap account-panel" aria-labelledby="account-title" hidden>
-    <h2 id="account-title">Budget account</h2>
+    <div class="login-emblem" aria-hidden="true">JT</div>
+    <h1 id="account-title">JamesTech Budget</h1>
+    <p class="login-copy">Sign in to access your budget on any device.</p>
     <form id="account-form">
       <div class="fields two">
         <label>Email<input name="email" type="email" autocomplete="username" required></label>
@@ -33,20 +37,32 @@
         <button type="button" id="forgot-password">Reset password</button>
       </div>
     </form>
+    <button id="continue-guest" type="button">Continue on this device</button>
+  </section>
+  <div class="wrap account-feedback">
     <p id="account-status" class="muted" role="status"></p>
     <div class="actions">
-      <button type="button" id="sign-out" hidden>Sign out</button>
+
       <button type="button" id="retry-sync" hidden>Retry sync</button>
       <button type="button" id="reload-cloud" hidden>Load cloud copy</button>
     </div>
-  </section>
+  </div>
+  <div class="wrap"><p id="status" role="status" hidden></p></div>
   <main id="budget-main" class="wrap">
+    <nav class="console-nav" aria-label="Budget sections">
+      <button type="button" data-view="dashboard" aria-current="page">Overview</button>
+      <button type="button" data-view="income">Income &amp; Savings</button>
+      <button type="button" data-view="purchases">Purchases</button>
+      <button type="button" data-view="history">History</button>
+    </nav>
+    <div id="view-progress" aria-hidden="true"><span></span></div>
+    <section class="console-view" data-screen="dashboard" aria-label="Overview">
     <!-- Weekly dashboard -->
     <div class="intro">
       <div><h1>Weekly budget</h1><p id="week-label"></p></div>
       <button id="reset" type="button">Reset week</button>
     </div>
-    <p id="status" role="status" hidden></p>
+
     <section class="summary" aria-label="Weekly summary">
       <article class="hero"><h2>Free Money</h2><output id="free-money">$0.00</output><p id="free-caption">Available after savings and expenses</p></article>
       <article><h2>Net Pay</h2><output id="net-pay">$0.00</output></article>
@@ -54,7 +70,16 @@
       <article><h2>Total Expenses</h2><output id="total-expenses">$0.00</output></article>
     </section>
 
-    <!-- Pay, savings, and spending breakdown -->
+      <section class="panel spending">
+        <h2>Spending by category</h2>
+        <p class="muted">Weekly recurring costs and one-time purchases for this week.</p>
+        <svg id="chart" viewBox="0 0 300 16" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <ul id="chart-legend" class="legend"></ul>
+      </section>
+    </section>
+    <section class="console-view" data-screen="income" aria-label="Income and savings" hidden>
+      <h1 class="screen-heading">Income &amp; Savings</h1>
+    <!-- Pay and savings -->
     <div class="overview">
       <section class="panel">
         <h2>Income calculator</h2>
@@ -80,14 +105,12 @@
         <div class="inline-total"><span>Saved across logged weeks</span><output id="saved-total">$0.00</output></div>
         <div id="goal" hidden><progress id="goal-progress" value="0" max="1" aria-label="Savings goal progress"></progress><p id="goal-caption" class="muted"></p></div>
       </section>
-      <section class="panel spending">
-        <h2>Spending by category</h2>
-        <p class="muted">Weekly recurring costs and one-time purchases for this week.</p>
-        <svg id="chart" viewBox="0 0 300 16" preserveAspectRatio="none" aria-hidden="true"></svg>
-        <ul id="chart-legend" class="legend"></ul>
-      </section>
+
     </div>
 
+    </section>
+    <section class="console-view" data-screen="purchases" aria-label="Purchases" hidden>
+      <h1 class="screen-heading">Purchases</h1>
     <!-- Purchase form and lists -->
     <section class="panel purchases" id="purchase-panel">
       <h2 id="purchase-title">Add a purchase</h2>
@@ -105,10 +128,14 @@
     </section>
     <div class="lists" id="purchase-lists"></div>
 
+    </section>
+    <section class="console-view" data-screen="history" aria-label="History" hidden>
+      <h1 class="screen-heading">History</h1>
     <!-- Saved income history -->
     <section class="panel history">
       <h2>Income history</h2>
       <div id="history"></div>
+    </section>
     </section>
   </main>
   <footer class="wrap">jamestech</footer>
@@ -127,4 +154,7 @@
   </template>
 </body>
 </html>
+
+
+
 
