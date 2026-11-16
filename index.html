@@ -6,6 +6,7 @@
   <meta name="description" content="Plan your weekly income, savings, and spending.">
   <title>JamesTech Budget</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="cloud-config.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -18,7 +19,28 @@
       <input type="file" id="import-file" accept=".json,application/json" hidden>
     </div>
   </header>
-  <main class="wrap">
+  <!-- Account controls appear once cloud settings are configured. -->
+  <section id="account-panel" class="panel wrap account-panel" aria-labelledby="account-title" hidden>
+    <h2 id="account-title">Budget account</h2>
+    <form id="account-form">
+      <div class="fields two">
+        <label>Email<input name="email" type="email" autocomplete="username" required></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      </div>
+      <div class="actions">
+        <button type="submit" id="sign-in" class="primary">Sign in</button>
+        <button type="button" id="sign-up">Create account</button>
+        <button type="button" id="forgot-password">Reset password</button>
+      </div>
+    </form>
+    <p id="account-status" class="muted" role="status"></p>
+    <div class="actions">
+      <button type="button" id="sign-out" hidden>Sign out</button>
+      <button type="button" id="retry-sync" hidden>Retry sync</button>
+      <button type="button" id="reload-cloud" hidden>Load cloud copy</button>
+    </div>
+  </section>
+  <main id="budget-main" class="wrap">
     <!-- Weekly dashboard -->
     <div class="intro">
       <div><h1>Weekly budget</h1><p id="week-label"></p></div>
@@ -105,3 +127,4 @@
   </template>
 </body>
 </html>
+

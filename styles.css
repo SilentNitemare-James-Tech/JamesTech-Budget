@@ -113,3 +113,8 @@ th:first-child, td:first-child { text-align: left; padding-left: 0; }
   .panel { padding: 15px; }
 }
 
+
+/* Cloud account controls */
+.account-panel { margin-top: 18px; }
+.account-panel .actions { margin-top: 10px; }
+.account-panel #account-status { margin-top: 10px; }

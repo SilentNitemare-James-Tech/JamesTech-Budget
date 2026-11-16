@@ -85,6 +85,11 @@
   }
 
   function persist() {
+    if (accountId) {
+      pending = true;
+      void syncBudget();
+      return false;
+    }
     try {
       localStorage.setItem(storageKey, JSON.stringify(state));
       return true;
@@ -524,6 +529,225 @@
     refresh();
   });
 
+  // Account storage. The guest budget stays under its original browser key.
+  let cloud = null;
+  let accountId = null;
+  let revision = null;
+  let pending = false;
+  let writing = null;
+  let conflict = false;
+  let recovering = false;
+  let switching = false;
+
+  const authForm = $("account-form");
+  const emailField = authForm.elements.email;
+  const passwordField = authForm.elements.password;
+  const accountMessage = message => { $("account-status").textContent = message; };
+  function lockBudget(locked) {
+    $("budget-main").inert = locked;
+    $("export").disabled = $("import").disabled = locked;
+  }
+  const emptyBudget = () => ({ version: 1, savings: { mode: "amount", value: 0, target: null }, drafts: [], history: [], purchases: [] });
+
+  function displayBudget() {
+    selectedDate = today();
+    fillIncome();
+    fillSavings();
+    clearPurchase();
+    refresh();
+  }
+
+  // An update succeeds only if the cloud revision still matches our last read.
+  // That prevents an older tab or device from silently overwriting a newer save.
+  async function syncBudget() {
+    if (writing || !pending || conflict || !accountId) return;
+    const owner = accountId;
+    pending = false;
+    $("retry-sync").hidden = true;
+    accountMessage("Saving to your account…");
+    writing = (async () => {
+      try {
+        const snapshot = JSON.parse(JSON.stringify(state));
+        const request = revision === null
+          ? cloud.from("budgets").insert({ owner, budget: snapshot, revision: 1 })
+          : cloud.from("budgets").update({ budget: snapshot, revision: revision + 1 }).eq("owner", owner).eq("revision", revision);
+        const { data, error } = await request.select("revision").maybeSingle();
+        if (accountId !== owner) return;
+        if (error && error.code !== "23505") throw error;
+        if (!data) {
+          conflict = true;
+          pending = true;
+          $("reload-cloud").hidden = false;
+          accountMessage("Another device saved a newer budget. Export your current edits before loading the cloud copy.");
+          return;
+        }
+        revision = data.revision;
+        accountMessage("Saved to your account.");
+      } catch {
+        if (accountId !== owner) return;
+        pending = true;
+        $("retry-sync").hidden = false;
+        accountMessage("Couldn’t save to your account. Retry sync or export a backup before leaving.");
+      }
+    })();
+    await writing;
+    writing = null;
+    if (pending && !conflict && $("retry-sync").hidden) void syncBudget();
+  }
+
+  async function openAccount(session, force = false) {
+    const next = session?.user.id ?? null;
+    if (switching || (!force && next === accountId)) return;
+    switching = true;
+    lockBudget(true);
+    $("retry-sync").hidden = $("reload-cloud").hidden = true;
+    $("sign-out").hidden = !next;
+    authForm.hidden = Boolean(next);
+    accountMessage(next ? "Loading your budget…" : "Using the budget saved in this browser.");
+    try {
+      if (writing) await writing;
+      accountId = next;
+      pending = conflict = false;
+      revision = null;
+      state = emptyBudget();
+      if (next) {
+        const { data, error } = await cloud.from("budgets").select("budget, revision").eq("owner", next).maybeSingle();
+        if (error) throw error;
+        if (data) {
+          state = validateBackup(data.budget);
+          revision = data.revision;
+        }
+        accountMessage("Signed in as " + session.user.email + ".");
+      } else {
+        load();
+      }
+      displayBudget();
+      lockBudget(false);
+    } catch {
+      // Keep the editor locked so a failed read cannot overwrite stored data.
+      accountMessage("Couldn’t load your account budget. Sign out and sign in to retry.");
+    } finally {
+      switching = false;
+    }
+  }
+
+  async function authAction(action) {
+    if (switching) return;
+    try {
+      await action();
+    } catch (error) {
+      accountMessage(error?.message || "Couldn’t connect to account services.");
+    }
+  }
+
+  async function initializeAccounts() {
+    const config = window.JAMESTECH_CLOUD;
+    if (!config?.url || !config?.publishableKey) return;
+    $("account-panel").hidden = false;
+    lockBudget(true);
+    accountMessage("Checking your sign-in…");
+    try {
+      const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+      cloud = createClient(config.url, config.publishableKey, { auth: { flowType: "pkce" } });
+      cloud.auth.onAuthStateChange((event, session) => {
+        // Schedule database calls outside Supabase's auth callback.
+        setTimeout(() => {
+          if (event === "PASSWORD_RECOVERY") {
+            recovering = true;
+            lockBudget(true);
+            authForm.hidden = false;
+            $("sign-out").hidden = false;
+            emailField.parentElement.hidden = true;
+            emailField.required = false;
+            $("sign-up").hidden = $("forgot-password").hidden = true;
+            $("sign-in").textContent = "Update password";
+            accountMessage("Enter a new password for your account.");
+          } else if (!recovering || event === "SIGNED_OUT") {
+            if (event === "SIGNED_OUT") resetRecoveryForm();
+            void openAccount(session, event === "INITIAL_SESSION");
+          }
+        }, 0);
+      });
+    } catch {
+      authForm.hidden = true;
+      accountMessage("Account services are unavailable. The local budget is available.");
+      lockBudget(false);
+    }
+  }
+
+  function resetRecoveryForm() {
+    recovering = false;
+    emailField.parentElement.hidden = false;
+    emailField.required = true;
+    $("sign-up").hidden = $("forgot-password").hidden = false;
+    $("sign-in").textContent = "Sign in";
+  }
+
+  const redirectUrl = () => new URL(location.pathname, location.origin).href;
+
+  authForm.addEventListener("submit", event => {
+    event.preventDefault();
+    void authAction(async () => {
+      if (recovering) {
+        if (passwordField.value.length < 8) throw new Error("Use at least 8 characters for your password.");
+        const { data, error } = await cloud.auth.updateUser({ password: passwordField.value });
+        if (error) throw error;
+        authForm.reset();
+        resetRecoveryForm();
+        await openAccount({ user: data.user }, true);
+        return;
+      }
+      const { error } = await cloud.auth.signInWithPassword({ email: emailField.value.trim(), password: passwordField.value });
+      if (error) throw error;
+      authForm.reset();
+    });
+  });
+
+  $("sign-up").addEventListener("click", () => void authAction(async () => {
+    if (!authForm.reportValidity()) return;
+    if (passwordField.value.length < 8) throw new Error("Use at least 8 characters for your password.");
+    const { data, error } = await cloud.auth.signUp({
+      email: emailField.value.trim(), password: passwordField.value, options: { emailRedirectTo: redirectUrl() }
+    });
+    if (error) throw error;
+    authForm.reset();
+    if (!data.session) accountMessage("Check your email for a confirmation link. Open it in this browser.");
+  }));
+
+  $("forgot-password").addEventListener("click", () => void authAction(async () => {
+    if (!emailField.reportValidity()) return;
+    const { error } = await cloud.auth.resetPasswordForEmail(emailField.value.trim(), { redirectTo: redirectUrl() });
+    if (error) throw error;
+    accountMessage("If that address is registered, a reset link will arrive by email. Open it in this browser.");
+  }));
+
+  $("sign-out").addEventListener("click", () => void authAction(async () => {
+    if (writing) await writing;
+    if (pending || writing) {
+      accountMessage("Your latest edits are unsaved. Retry sync, or export them and reload the page before signing out.");
+      return;
+    }
+    const { error } = await cloud.auth.signOut({ scope: "local" });
+    if (error) throw error;
+    if (recovering) {
+      resetRecoveryForm();
+      await openAccount(null, true);
+    }
+  }));
+
+  $("retry-sync").addEventListener("click", () => void syncBudget());
+  $("reload-cloud").addEventListener("click", () => void authAction(async () => {
+    if (!window.confirm("Discard unsynced edits and load the saved cloud budget?")) return;
+    const { data, error } = await cloud.auth.getSession();
+    if (error) throw error;
+    await openAccount(data.session, true);
+  }));
+  window.addEventListener("beforeunload", event => {
+    if (!pending && !writing) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
   // Initialize the dashboard from browser storage.
   load();
   fillIncome();
@@ -532,4 +756,7 @@
   clearPurchase();
   buildLists();
   refresh();
+  void initializeAccounts();
 })();
+
+
