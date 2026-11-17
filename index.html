@@ -53,6 +53,8 @@
       <button type="button" data-view="dashboard" aria-current="page">Overview</button>
       <button type="button" data-view="income">Income &amp; Savings</button>
       <button type="button" data-view="purchases">Purchases</button>
+      <button type="button" data-view="ira">IRA</button>
+      <button type="button" data-view="projections">Projections</button>
       <button type="button" data-view="history">History</button>
     </nav>
     <div id="view-progress" aria-hidden="true"><span></span></div>
@@ -137,6 +139,52 @@
     </section>
     <div class="lists" id="purchase-lists"></div>
 
+    </section>
+    <section class="console-view" data-screen="ira" aria-label="IRA" hidden>
+      <h1 class="screen-heading">IRA</h1>
+      <div class="overview">
+        <section class="panel">
+          <h2>Log a contribution</h2>
+          <p class="muted">Record money you’ve deposited. Contributions reduce Free Money for the week you made them.</p>
+          <form id="ira-form" class="fields">
+            <label>Amount ($)<input name="amount" type="number" min=".01" max="1000000" step=".01" inputmode="decimal" required></label>
+            <label>Date<input name="date" type="date" min="1900-01-01" required></label>
+            <div><button class="primary" type="submit">Add contribution</button></div>
+          </form>
+          <div class="inline-total"><span>Total IRA contributions</span><output id="ira-total">$0.00</output></div>
+        </section>
+        <section class="panel">
+          <h2>Contribution history</h2>
+          <ul class="entries" id="ira-history"></ul>
+        </section>
+      </div>
+    </section>
+    <section class="console-view" data-screen="projections" aria-label="Projections" hidden>
+      <h1 class="screen-heading">Projections</h1>
+      <div class="overview">
+        <section class="panel">
+          <h2>Projection assumptions</h2>
+          <p class="muted">Enter the rates and future deposits you want to model. Weekly deposits here are for the estimate only.</p>
+          <form id="projection-form" class="fields">
+            <label>Years<input name="years" type="number" min="1" max="50" step="1" required></label>
+            <label>Savings annual growth (%)<input name="savingsRate" type="number" min="0" max="20" step=".01" inputmode="decimal" required></label>
+            <label>IRA annual growth (%)<input name="iraRate" type="number" min="0" max="20" step=".01" inputmode="decimal" required></label>
+            <label>Future weekly savings ($)<input name="savingsWeekly" type="number" min="0" max="1000000" step=".01" inputmode="decimal" required></label>
+            <label>Future weekly IRA contributions ($)<input name="iraWeekly" type="number" min="0" max="1000000" step=".01" inputmode="decimal" required></label>
+          </form>
+        </section>
+        <section class="panel">
+          <h2 id="projection-title">Projected balances</h2>
+          <p class="muted">Starts with savings from logged paychecks and recorded IRA contributions. Estimates assume steady rates and end-of-week deposits.</p>
+          <div class="table-scroll" tabindex="0" role="region" aria-labelledby="projection-title">
+            <table>
+              <thead><tr><th scope="col">Account</th><th scope="col">Recorded today</th><th scope="col">Estimated growth</th><th scope="col">Projected balance</th></tr></thead>
+              <tbody id="projection-results"></tbody>
+            </table>
+          </div>
+          <p class="muted">Actual returns can vary. Estimates exclude taxes and fees.</p>
+        </section>
+      </div>
     </section>
     <section class="console-view" data-screen="history" aria-label="History" hidden>
       <h1 class="screen-heading">History</h1>

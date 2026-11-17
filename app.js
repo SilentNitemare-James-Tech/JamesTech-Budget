@@ -13,6 +13,8 @@
   const income = $("income-form").elements;
   const schedule = $("pay-schedule").elements;
   const savings = $("savings-form").elements;
+  const ira = $("ira-form").elements;
+  const projection = $("projection-form").elements;
   const purchase = $("purchase-form").elements;
   const lists = [];
   let editingId = null;
@@ -66,6 +68,17 @@
     (item.type === "One-time" && item.frequency === null ||
      item.type === "Recurring" && Object.hasOwn(frequencies, item.frequency));
 
+  const defaultProjection = { years: 10, savingsRate: 0, iraRate: 0, savingsWeekly: 0, iraWeekly: 0 };
+  const projectionFields = {
+    years: value => Number.isInteger(value) && value >= 1 && value <= 50,
+    savingsRate: value => validNumber(value, 20),
+    iraRate: value => validNumber(value, 20),
+    savingsWeekly: value => validNumber(value, 1000000),
+    iraWeekly: value => validNumber(value, 1000000)
+  };
+  const validContribution = item => item && typeof item.id === "string" && item.id.length > 0 &&
+    validDate(item.date) && validNumber(item.amount, 1000000, .01);
+
   // State and backup validation. Keep one saved snapshot per calendar week.
   let selectedDate = today();
   let state = { version: 1, savings: { mode: "amount", value: 0, target: null }, drafts: [], history: [], purchases: [] };
@@ -81,9 +94,15 @@
         !data.purchases.every(validPurchase)) {
       throw new Error("Invalid JamesTech Budget backup.");
     }
+    const { iraContributions = [], projections = defaultProjection } = data;
+    if (!Array.isArray(iraContributions) || !iraContributions.every(validContribution) ||
+        !projections || !Object.entries(projectionFields).every(([field, valid]) => valid(projections[field]))) {
+      throw new Error("Invalid savings or IRA data.");
+    }
     const unique = (entries, key) => new Set(entries.map(key)).size === entries.length;
     const weekKey = entry => monday(entry.date);
-    if (!unique(data.drafts, weekKey) || !unique(data.history, weekKey) || !unique(data.purchases, item => item.id)) {
+    if (!unique(data.drafts, weekKey) || !unique(data.history, weekKey) || !unique(data.purchases, item => item.id) ||
+        !unique(iraContributions, item => item.id)) {
       throw new Error("The backup contains duplicate records.");
     }
     return data;
@@ -255,17 +274,18 @@
     const saving = weeklySavings(net);
     const totals = budgetExpenses(start, end);
     const expense = Object.values(totals).reduce((sum, value) => sum + value, 0);
-    const free = net - saving - expense;
+    const iraThisWeek = iraTotal(item => item.date >= start && item.date <= end);
+    const free = net - saving - expense - iraThisWeek;
     $("gross-pay").value = money(paycheck.gross);
     $("paycheck-net").value = money(paycheck.net);
     $("net-pay").value = money(net);
-    $("weekly-saving").value = money(saving);
+    $("weekly-saving").value = money(saving + iraThisWeek);
     $("total-expenses").value = money(expense);
     $("free-money").value = money(free);
     $("free-money").dataset.tone = free < 0 ? "red" : free < 5000 ? "yellow" : "green";
     $("free-caption").textContent = free < 0 ? "Over budget" : "Available after savings and expenses";
 
-    const saved = state.history.reduce((sum, item) => sum + item.saved, 0);
+    const saved = savedTotal();
     const target = cents(state.savings.target ?? 0);
     $("saved-total").value = money(saved);
     $("goal").hidden = target === 0;
@@ -459,7 +479,112 @@
     refresh();
   }
 
+  const savedTotal = () => state.history.reduce((sum, item) => sum + item.saved, 0);
+  const contributions = () => state.iraContributions ?? [];
+
+  function iraTotal(include = () => true) {
+    return contributions().reduce((sum, item) => include(item) ? sum + cents(item.amount) : sum, 0);
+  }
+
+  function fillProjection() {
+    for (const [field, value] of Object.entries(defaultProjection)) {
+      projection[field].value = state.projections?.[field] ?? value;
+    }
+    ira.date.value = today();
+    ira.date.max = today();
+    ira.amount.value = "";
+  }
+
+  function projectBalance(balance, annualRate, years, weeklyDeposit) {
+    const weeks = years * 52;
+    const deposits = weeks * weeklyDeposit;
+    if (annualRate === 0) return { growth: 0, balance: balance + deposits };
+
+    const weeklyLogRate = Math.log1p(annualRate / 100) / 52;
+    const growthFactor = Math.expm1(weeks * weeklyLogRate);
+    const projected = Math.round(balance * (1 + growthFactor) + weeklyDeposit * growthFactor / Math.expm1(weeklyLogRate));
+    return { growth: projected - balance - deposits, balance: projected };
+  }
+
+  function renderProjections() {
+    const { years, savingsRate, iraRate, savingsWeekly, iraWeekly } = state.projections ?? defaultProjection;
+    $("projection-title").textContent = "Projected balances in " + years + (years === 1 ? " year" : " years");
+    const savingsBalance = savedTotal();
+    const iraBalance = iraTotal();
+    const savingsResult = projectBalance(savingsBalance, savingsRate, years, cents(savingsWeekly));
+    const iraResult = projectBalance(iraBalance, iraRate, years, cents(iraWeekly));
+    const results = $("projection-results");
+    results.replaceChildren();
+    for (const [label, recorded, growth, balance] of [
+      ["Savings", savingsBalance, savingsResult.growth, savingsResult.balance],
+      ["IRA", iraBalance, iraResult.growth, iraResult.balance],
+      ["Combined", savingsBalance + iraBalance, savingsResult.growth + iraResult.growth, savingsResult.balance + iraResult.balance]
+    ]) {
+      const row = results.insertRow();
+      const heading = node("th", label);
+      heading.scope = "row";
+      row.append(heading);
+      for (const value of [recorded, growth, balance]) row.insertCell().textContent = money(value);
+    }
+  }
+
+  function renderIra() {
+    $("ira-total").value = money(iraTotal());
+    const history = $("ira-history");
+    history.replaceChildren();
+    const sorted = [...contributions()].sort((a, b) => b.date.localeCompare(a.date));
+    if (!sorted.length) history.append(node("li", "No IRA contributions yet.", "muted"));
+    for (const item of sorted) {
+      const row = node("li");
+      const heading = node("div", undefined, "entry-head");
+      heading.append(node("strong", money(cents(item.amount))), node("span", displayDate(item.date), "muted"));
+      const actions = node("div", undefined, "actions");
+      const remove = node("button", "Delete");
+      remove.type = "button";
+      remove.setAttribute("aria-label", "Delete " + money(cents(item.amount)) + " contribution from " + displayDate(item.date));
+      remove.addEventListener("click", () => {
+        if (!window.confirm("Delete this IRA contribution?")) return;
+        state.iraContributions = contributions().filter(entry => entry.id !== item.id);
+        if (persist()) announce("IRA contribution deleted.");
+        refresh();
+      });
+      actions.append(remove);
+      row.append(heading, actions);
+      history.append(row);
+    }
+  }
+
+  $("ira-form").addEventListener("submit", event => {
+    event.preventDefault();
+    const item = {
+      id: window.crypto.randomUUID?.() ?? Date.now() + "-" + Math.random().toString(36).slice(2),
+      amount: ira.amount.valueAsNumber,
+      date: ira.date.value
+    };
+    if (!validContribution(item) || item.date > today()) {
+      announce("Enter a valid amount and a contribution date through today.");
+      return;
+    }
+    (state.iraContributions ??= []).push(item);
+    ira.amount.value = "";
+    if (persist()) announce("IRA contribution added.");
+    refresh();
+  });
+
+  $("projection-form").addEventListener("submit", event => event.preventDefault());
+  for (const [field, valid] of Object.entries(projectionFields)) {
+    projection[field].addEventListener("input", () => {
+      const value = projection[field].valueAsNumber;
+      if (!valid(value)) return;
+      (state.projections ??= { ...defaultProjection })[field] = value;
+      persist();
+      renderProjections();
+    });
+  }
+
   function refresh() {
+    renderIra();
+    renderProjections();
     renderDashboard();
     renderHistory();
     lists.forEach(renderList);
@@ -640,6 +765,7 @@
     selectedDate = today();
     fillIncome();
     fillSavings();
+    fillProjection();
     fillSchedule();
     clearPurchase();
     if (persist()) announce("Backup restored.");
@@ -730,6 +856,7 @@
     selectedDate = today();
     fillIncome();
     fillSavings();
+    fillProjection();
     fillSchedule();
     clearPurchase();
     refresh();
@@ -938,6 +1065,7 @@
   load();
   fillIncome();
   fillSavings();
+  fillProjection();
   fillSchedule();
   fillCategories(purchase.category);
   clearPurchase();
